@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "confraria"
+version = "0.1.0"
+description = "Pipeline de Reels da série 'Abre ou guarda?' (Confraria Australis)"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy", "scipy", "opencv-python-headless", "pillow", "soundfile", "fonttools", "imageio-ffmpeg",
+]
+
+[project.optional-dependencies]
+upscale = ["realesrgan-ncnn-py"]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

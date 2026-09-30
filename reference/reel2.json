@@ -1,0 +1,19 @@
+{
+  "slug": "ampoule",
+  "reel_number": 2,
+  "image": "ampoule_src.jpg",
+  "series": "abre-ou-guarda",
+  "screens": {
+    "t1": {"lines": [[["Só ", "w"], ["12", "gold"], [" garrafas no mundo.", "w"]], [["E nenhuma tem rolha.", "w"]]]},
+    "t2": {"lines": [[["Ela é lacrada em vidro", "w"]], [["soprado à mão.", "w"]]]},
+    "t3": {"price": "AU$ 168.000"},
+    "t4": {"question": "Abre ou guarda?"}
+  },
+  "focus": {
+    "hero_cx": 384, "hero_cy": 810, "hero_h": 480,
+    "detail_cx": 384, "detail_cy": 674, "detail_w": 340,
+    "lamp": [383, 424], "sconces": [[61, 567], [702, 568]]
+  },
+  "timing": {"screen": 3.5, "last": 4.5},
+  "sound": {"bed_root": "A", "ting_hz": [1318.5, 659.25]}
+}
