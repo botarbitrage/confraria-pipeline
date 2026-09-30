@@ -30,7 +30,29 @@ Opções: `--upscale auto|ai|lanczos` (padrão `auto`), `--gpu N` (padrão `-1` 
 O upscale Real-ESRGAN x4plus leva ~9,5 min em CPU para 768x1376 → 3072x5504. Sem `realesrgan-ncnn-py`, o modo `auto`
 usa um substituto Lanczos, **bom só para testar enquadramento, texto e som**, não para publicar.
 
-## O `reel.json`
+## Modo 4 imagens (telas prontas do Gemini) — o fluxo atual
+
+O Gemini entrega as 4 telas já com o texto desenhado: `<nome>_1` a `<nome>_4` (.jpg/.png/.webp, 9:16, mesmo tamanho).
+
+```bash
+python -m confraria.cli deck <pasta> 2026-10-02_colecaogrange --frames 0.5 5 8.5 13   # quadros de checagem
+python -m confraria.cli deck <pasta> 2026-10-02_colecaogrange --out out/               # out/<nome>.mp4 + out/<nome>_capa.jpg
+```
+
+O que acontece (`src/confraria/deck.py` e `textsplit.py`):
+
+- cada imagem é ampliada 2x (Lanczos + nitidez; `--upscale ai` usa Real-ESRGAN, lento em CPU);
+- o texto do topo é **separado do fundo** (o fundo por baixo é reconstruído), então o fundo se move e o texto anima sozinho;
+- câmera contínua (aproximação lenta + empurrão curto em cada corte, com desfoque de movimento) e fusão entre as telas;
+- texto entra por linha (sobe e ganha foco) e sai desfocando; o preço pousa com brilho dourado e um reflexo atravessando;
+- luz que atravessa as garrafas (tela 1 e preço), clarão quente na revelação do preço, poeira dourada, cintilação,
+  vinheta que respira, luzes baixando na tela 4, granulação e fade final curto (loop limpo);
+- a trilha é a mesma do modo original (sintetizada), sincronizada com os cortes; a capa é a tela 3 em repouso.
+
+Opções: `--screen 3.5` (telas 1–3), `--last 4.5` (tela 4), `--root A` (tônica da trilha). ~3,5 min em 2 núcleos de CPU; MP4 de ~6 MB (abaixo do limite de 10 MB do upload pelo Chrome).
+Se o texto de uma tela não puder ser separado (sem faixa escura limpa no topo), o log avisa e aquela tela usa a imagem inteira.
+
+## O `reel.json` (modo original: 1 imagem sem texto)
 
 Um por Reel; exemplo completo em [`reference/reel2.json`](reference/reel2.json).
 
@@ -74,7 +96,7 @@ Testes rápidos (`python -m pytest`) checam a validação do JSON e que `SHOTS`/
 ## Estrutura
 
 ```
-src/confraria/  config.py (reel.json) · fonts.py · upscale.py · shots.py (enquadramentos e looks)
+src/confraria/  deck.py + textsplit.py (modo 4 imagens) · config.py (reel.json) · fonts.py · upscale.py · shots.py (enquadramentos e looks)
                 captions.py (texto) · camera.py (câmera virtual + vídeo) · sound.py · mux.py (loudnorm/mux/capa) · cli.py
 reference/      Reel 2 (regressão)      skills/  rascunhos: criar-conteudo, exportar-prompts, gerar-reels
 ```

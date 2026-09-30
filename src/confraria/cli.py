@@ -4,6 +4,10 @@
   python -m confraria.cli frames reel.json 0 3.5 7.3         quadros de checagem (JPG)
   python -m confraria.cli check  reel.json                   só valida o reel.json e a imagem
   python -m confraria.cli regress reel.json ref.mp4          compara quadros com um vídeo de referência
+
+Modo "4 imagens" (telas prontas do Gemini, texto já desenhado):
+  python -m confraria.cli deck   <pasta> <nome> --out out/    MP4 <nome>.mp4 + capa <nome>_capa.jpg
+  python -m confraria.cli deck   <pasta> <nome> --frames 0 3.5 7.4 11.5    só quadros de checagem
 """
 import argparse
 import os
@@ -130,6 +134,45 @@ def cmd_make(args):
     return 0
 
 
+def cmd_deck(args):
+    from . import deck as D
+    t0 = time.time()
+    imgs = D.find_images(args.folder, args.name)
+    cfg = D.DeckConfig(args.name, imgs, screen=args.screen, last=args.last, bed_root=args.root,
+                       upscale=args.upscale if args.upscale in ('ai', 'lanczos') else 'lanczos')
+    r = D.DeckRenderer(cfg, log)
+    out = args.out
+    os.makedirs(out, exist_ok=True)
+    if args.frames:
+        import cv2
+        fdir = os.path.join(out, 'frames')
+        os.makedirs(fdir, exist_ok=True)
+        for t in args.frames:
+            if not 0 <= t <= r.tl.dur:
+                raise SystemExit(f'tempo {t:g}s fora do vídeo (0 a {r.tl.dur:g}s)')
+            path = os.path.join(fdir, f'{args.name}_{t:05.2f}.jpg')
+            cv2.imwrite(path, cv2.cvtColor(r.frame(int(round(t * FPS))), cv2.COLOR_RGB2BGR),
+                        [cv2.IMWRITE_JPEG_QUALITY, 92])
+            log(path)
+        return 0
+    work = args.work or os.path.join(out, 'work', args.name)
+    os.makedirs(work, exist_ok=True)
+    silent = os.path.join(work, 'video_sem_audio.mp4')
+    log(f'renderizando {r.tl.nfr} quadros ({r.tl.dur:g}s, {FPS} fps)...')
+    r.write_video(silent, mux.ffmpeg_exe())
+    log('sintetizando a trilha...')
+    raw = os.path.join(work, 'audio_raw.wav')
+    _, peak = sound.synthesize(r.tl, D._SoundReel(cfg), raw)
+    log(f'áudio bruto: pico {peak:.3f}; normalizando (loudnorm {mux.TARGET_I:g} LUFS, TP {mux.TARGET_TP:g})...')
+    norm = mux.normalize(raw, os.path.join(work, 'audio_norm.wav'))
+    mp4 = mux.mux(silent, norm, os.path.join(out, f'{args.name}.mp4'))
+    capa = mux.save_cover(Image.fromarray(r.still(2)), os.path.join(out, f'{args.name}_capa.jpg'))
+    m = mux.measure(mp4)
+    log(f'pronto em {time.time() - t0:.0f}s:\n  {mp4}\n  {capa}\n'
+        f'  loudness {m["input_i"]:.1f} LUFS, true peak {m["input_tp"]:.1f} dBTP')
+    return 0
+
+
 def main(argv=None):
     for stream in (sys.stdout, sys.stderr):      # acentos corretos também no Windows
         if hasattr(stream, 'reconfigure'):
@@ -159,6 +202,18 @@ def main(argv=None):
     p.add_argument('reference', help='MP4 de referência')
     p.add_argument('--min-psnr', type=float, default=24.0)
     p.set_defaults(fn=cmd_regress)
+    p = sub.add_parser('deck', help='modo 4 imagens: <pasta>/<nome>_1..4 com o texto já desenhado -> MP4 + capa')
+    p.add_argument('folder', help='pasta com <nome>_1 ... <nome>_4 (.jpg/.png/.webp)')
+    p.add_argument('name', help='nome do arquivo da linha do calendário, ex.: 2026-10-02_colecaogrange')
+    p.add_argument('--out', default='out', help='pasta de saída (padrão: out/)')
+    p.add_argument('--work', help='pasta de trabalho (padrão: <out>/work/<nome>)')
+    p.add_argument('--screen', type=float, default=3.5, help='duração das telas 1 a 3 (s, padrão 3.5)')
+    p.add_argument('--last', type=float, default=4.5, help='duração da tela 4 (s, padrão 4.5)')
+    p.add_argument('--root', default='A', help='tônica da trilha (padrão A = lá menor)')
+    p.add_argument('--upscale', choices=('lanczos', 'ai'), default='lanczos',
+                   help='lanczos = rápido (padrão); ai = Real-ESRGAN (lento em CPU)')
+    p.add_argument('--frames', nargs='*', type=float, help='só gera quadros de checagem nesses tempos (s)')
+    p.set_defaults(fn=cmd_deck)
     p = sub.add_parser('check', help='valida o reel.json e a imagem, sem renderizar')
     p.add_argument('reel')
     p.set_defaults(fn=cmd_check)
@@ -169,7 +224,10 @@ def main(argv=None):
     except config.ConfigError as e:
         print(str(e), file=sys.stderr)
         return 2
-    except (upscale.UpscaleUnavailable, FileNotFoundError, RuntimeError) as e:
+    except Exception as e:
+        from .deck import DeckError
+        if not isinstance(e, (DeckError, upscale.UpscaleUnavailable, FileNotFoundError, RuntimeError)):
+            raise
         print(f'erro: {e}', file=sys.stderr)
         return 1
 
